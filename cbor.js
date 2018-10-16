@@ -34,11 +34,12 @@ function encode(value) {
   var offset = 0;
 
   function prepareWrite(length) {
-    var newByteLength = data.byteLength;
+    var oldByteLength = data.byteLength;
+    var newByteLength = oldByteLength;
     var requiredLength = offset + length;
     while (newByteLength < requiredLength)
       newByteLength <<= 1;
-    if (newByteLength !== data.byteLength) {
+    if (newByteLength !== oldByteLength) {
       var oldDataView = dataView;
       data = new ArrayBuffer(newByteLength);
       dataView = new DataView(data);
