@@ -300,11 +300,86 @@ function decode(data, tagger, simpleValue) {
     }
   }
 
+  var decoders = [
+    // 0 - Unsigned Integer
+    function(length) { return length; },
+    // 1 - Negative Integer
+    function(length) { return -1 - length; },
+    // 2 - Byte String
+    function(length) {
+      if (length < 0) {
+        var elements = [];
+        var fullArrayLength = 0;
+        while ((length = readIndefiniteStringLength(2)) >= 0) {
+          fullArrayLength += length;
+          elements.push(readArrayBuffer(length));
+        }
+        var fullArray = new Uint8Array(fullArrayLength);
+        var fullArrayOffset = 0;
+        for (var i = 0; i < elements.length; ++i) {
+          fullArray.set(elements[i], fullArrayOffset);
+          fullArrayOffset += elements[i].length;
+        }
+        return fullArray;
+      }
+      return readArrayBuffer(length);
+    },
+    // 3 - Text String
+    function(length) {
+      var utf16data = [];
+      if (length < 0) {
+        while ((length = readIndefiniteStringLength(3)) >= 0)
+          appendUtf16Data(utf16data, length);
+      } else
+        appendUtf16Data(utf16data, length);
+      return String.fromCharCode.apply(null, utf16data);
+    },
+    // 4 - Array
+    function(length) {
+      var retArray;
+      if (length < 0) {
+        retArray = [];
+        while (!readBreak())
+          retArray.push(decodeItem());
+      } else {
+        retArray = new Array(length);
+        for (var i = 0; i < length; ++i)
+          retArray[i] = decodeItem();
+      }
+      return retArray;
+    },
+    // 5 - Map
+    function(length) {
+      var retObject = {};
+      for (var i = 0; i < length || length < 0 && !readBreak(); ++i) {
+        var key = decodeItem();
+        retObject[key] = decodeItem();
+      }
+      return retObject;
+    },
+    // 6 - Tagged
+    function(length) { return tagger(decodeItem(), length); },
+    // 7 - Float / Misc
+    function(length) {
+      switch (length) {
+        case 20:
+          return false;
+        case 21:
+          return true;
+        case 22:
+          return null;
+        case 23:
+          return undefined;
+        default:
+          return simpleValue(length);
+      }
+    }
+  ];
+
   function decodeItem() {
     var initialByte = readUint8();
     var majorType = initialByte >> 5;
     var additionalInformation = initialByte & 0x1f;
-    var i;
     var length;
 
     if (majorType === 7) {
@@ -322,71 +397,7 @@ function decode(data, tagger, simpleValue) {
     if (length < 0 && (majorType < 2 || 6 < majorType))
       throw "Invalid length";
 
-    switch (majorType) {
-      case 0:
-        return length;
-      case 1:
-        return -1 - length;
-      case 2:
-        if (length < 0) {
-          var elements = [];
-          var fullArrayLength = 0;
-          while ((length = readIndefiniteStringLength(majorType)) >= 0) {
-            fullArrayLength += length;
-            elements.push(readArrayBuffer(length));
-          }
-          var fullArray = new Uint8Array(fullArrayLength);
-          var fullArrayOffset = 0;
-          for (i = 0; i < elements.length; ++i) {
-            fullArray.set(elements[i], fullArrayOffset);
-            fullArrayOffset += elements[i].length;
-          }
-          return fullArray;
-        }
-        return readArrayBuffer(length);
-      case 3:
-        var utf16data = [];
-        if (length < 0) {
-          while ((length = readIndefiniteStringLength(majorType)) >= 0)
-            appendUtf16Data(utf16data, length);
-        } else
-          appendUtf16Data(utf16data, length);
-        return String.fromCharCode.apply(null, utf16data);
-      case 4:
-        var retArray;
-        if (length < 0) {
-          retArray = [];
-          while (!readBreak())
-            retArray.push(decodeItem());
-        } else {
-          retArray = new Array(length);
-          for (i = 0; i < length; ++i)
-            retArray[i] = decodeItem();
-        }
-        return retArray;
-      case 5:
-        var retObject = {};
-        for (i = 0; i < length || length < 0 && !readBreak(); ++i) {
-          var key = decodeItem();
-          retObject[key] = decodeItem();
-        }
-        return retObject;
-      case 6:
-        return tagger(decodeItem(), length);
-      case 7:
-        switch (length) {
-          case 20:
-            return false;
-          case 21:
-            return true;
-          case 22:
-            return null;
-          case 23:
-            return undefined;
-          default:
-            return simpleValue(length);
-        }
-    }
+    return decoders[majorType](length);
   }
 
   var ret = decodeItem();
