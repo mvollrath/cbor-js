@@ -27,6 +27,29 @@ var POW_2_24 = 5.960464477539063e-8,
     POW_2_32 = 4294967296,
     POW_2_53 = 9007199254740992;
 
+var typedArrayTags = {
+  Uint8Array: 64,
+  Uint16Array: 65,
+  Uint32Array: 66,
+  //Uint8ClampedArray: 68,
+  // Uint16Array: 69, // big-endian
+  // Uint32Array: 70, // big-endian
+  Float32Array: 81,
+  Float64Array: 82
+  // Float32Array: 85, // big-endian
+  // Float64Array: 86  // big-endian
+};
+
+//var taggedArrayTypes = new Map(Array.from(typedArrayTags).reverse());
+var taggedArrayTypes = {
+  64: Uint8Array,
+  65: Uint16Array,
+  66: Uint32Array,
+  //68: Uint8ClampedArray,
+  81: Float32Array,
+  82: Float64Array
+};
+
 function encode(value) {
   var data = new ArrayBuffer(256);
   var dataView = new DataView(data);
@@ -159,6 +182,14 @@ function encode(value) {
         } else if (value instanceof Uint8Array) {
           writeTypeAndLength(2, value.length);
           writeUint8Array(value);
+        } else if (ArrayBuffer.isView(value)) {
+          length = value.byteLength;
+          var view = new Uint8Array(value.buffer);
+          var t = value.constructor;
+          var tag = typedArrayTags[t];
+          writeTypeAndLength(6, tag);
+          writeTypeAndLength(2, length);
+          writeUint8Array(view);
         } else {
           var keys = Object.keys(value);
           length = keys.length;
@@ -184,12 +215,18 @@ function encode(value) {
   return ret;
 }
 
+function defaultTagger(data, tag) {
+  if (tag in taggedArrayTypes)
+    return new taggedArrayTypes[tag](data.buffer);
+  return data;
+}
+
 function decode(data, tagger, simpleValue) {
   var dataView = new DataView(data);
   var offset = 0;
 
   if (typeof tagger !== "function")
-    tagger = function(value) { return value; };
+    tagger = defaultTagger;
   if (typeof simpleValue !== "function")
     simpleValue = function() { return undefined; };
 
