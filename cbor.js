@@ -34,18 +34,23 @@ var typedArrayTags = {
   //Uint8ClampedArray: 68,
   // Uint16Array: 69, // big-endian
   // Uint32Array: 70, // big-endian
+  Int8Array: 72,
+  Int16Array: 73,
+  Int32Array: 74,
   Float32Array: 81,
   Float64Array: 82
   // Float32Array: 85, // big-endian
   // Float64Array: 86  // big-endian
 };
 
-//var taggedArrayTypes = new Map(Array.from(typedArrayTags).reverse());
 var taggedArrayTypes = {
   64: Uint8Array,
   65: Uint16Array,
   66: Uint32Array,
   //68: Uint8ClampedArray,
+  72: Int8Array,
+  73: Int16Array,
+  74: Int32Array,
   81: Float32Array,
   82: Float64Array
 };
